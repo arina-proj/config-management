@@ -60,6 +60,4 @@ args (list) - аргументы команды
 Создает экземпляр VFSRepl с именем "myVFS"
 Запускает основной цикл выполнения
 
-
-![alt text](image-1.png)
-![alt text](image.png)
+![alt text](image-2.png)
