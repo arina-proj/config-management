@@ -1,0 +1,25 @@
+# Тестирование VFS
+whoami
+pwd
+ls
+
+# Тестирование cd
+cd documents
+pwd
+ls
+cd ..
+pwd
+
+# Тестирование uniq
+cd /
+uniq file1.txt
+uniq file2.txt
+
+# Тестирование ошибок
+uniq
+uniq nonexistent.txt
+uniq binary_file.bin
+cd invalid_dir
+
+# Завершение
+exit

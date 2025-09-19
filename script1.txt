@@ -1,0 +1,5 @@
+ls
+mkdir test
+cd test
+touch file.txt
+ls
