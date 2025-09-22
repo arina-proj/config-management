@@ -12,6 +12,12 @@ class VFSNode:
         self.parent = parent
         self.content : Optional[bytes] = None # либо типа bytes либо None - по умолчанию
 
+    def remove_child(self, child_name: str) -> bool:
+        if child_name in self.children:
+            del self.children[child_name]
+            return True
+        return False
+
 
     def add_child(self, child: 'VFSNode'):
         self.children[child.vfs_name] =child
@@ -30,6 +36,30 @@ class VFS:
         self.root = VFSNode('', is_directory=True)
         self.loaded = False #загружена ли директория с диска
         self.current_dir = self.root
+
+    def find_node(self, path):
+        if path.startswith('/'):
+            current = self.root
+            path_parts = path[1:].split('/')
+        else:
+            current = self.current_dir
+            path_parts = path.split('/')
+        
+        # Убираем пустые части (если путь заканчивается на /)
+        path_parts = [part for part in path_parts if part]
+        
+        for part in path_parts:
+            if part == '..':
+                if current.parent:
+                    current = current.parent
+            elif part == '.':
+                continue
+            elif part in current.children:
+                current = current.children[part]
+            else:
+                return None
+        
+        return current
 
     def load_from_disk(self, disk_path: str):
         path_obj = Path(disk_path)
@@ -92,18 +122,33 @@ class VFSRepl:
         args = parts[1:] if len(parts)>1 else []
         return command, args
         
-    def cmd_ls(self): # базовая версия без аргументов
-        target_dir = self.vfs.current_dir
-
-        if not target_dir.is_directory:
-            print("ls: не является директорией")
-            return
-        if not target_dir.children:
-            print("Директория пуста")
-            return
-        for name, node in sorted(target_dir.children.items()):  # f(файл) d(директория)
-            file_type = "d" if node.is_directory else "f"
-            print(f"{file_type} {name}")
+    def cmd_ls(self, args=None):
+        if args:
+            # Обработка аргументов (путей к файлам/директориям)
+            for arg in args:
+                target_node = self.vfs.find_node(arg)
+                if not target_node:
+                    print(f"ls: {arg}: No such file or directory")
+                elif target_node.is_directory:
+                    # Показать содержимое директории
+                    if not target_node.children:
+                        print(f"Директория '{arg}' пуста")
+                    else:
+                        for name, node in sorted(target_node.children.items()):
+                            file_type = "d" if node.is_directory else "f"
+                            print(f"{file_type} {name}")
+                else:
+                    # Показать только этот файл
+                    print(f"f {arg}")
+        else:
+            # Базовый случай - показать текущую директорию
+            target_dir = self.vfs.current_dir
+            if not target_dir.children:
+                print("Директория пуста")
+            else:
+                for name, node in sorted(target_dir.children.items()):
+                    file_type = "d" if node.is_directory else "f"
+                    print(f"{file_type} {name}")
 
     def cmd_cd(self, args):
         if not args:
@@ -168,11 +213,64 @@ class VFSRepl:
                 print(f"uniq: {filename}: не файл или файл пуст")
         else:
             print(f"uniq: {filename}: файл не найден")
-   
+
+    def cmd_rm(self, args):
+        if not args:
+            print("rm: требуется указать файл или директорию")
+            return
+        
+        recursive = False 
+        targets = []
+        
+        for arg in args: #проверяем флаги
+            if arg == '-r' or arg == '-R':
+                recursive = True
+            else:
+                targets.append(arg)
+        
+        if not targets:
+            print("rm: требуется указать файл или директорию")
+            return
+        
+        for target in targets:
+            if self.vfs.find_node(target):
+                target_node = self.vfs.find_node(target)
+                
+                if target_node.is_directory:
+                    if not recursive:
+                        print(f"rm: {target}: является директорией (используйте -r для рекурсивного удаления)")
+                        continue
+                    
+                    # Рекурсивное удаление директории
+                    if not self.remove_directory(target_node):
+                        print(f"rm: не удалось удалить директорию '{target}'")
+                        continue
+                
+                # Удаление файла или уже очищенной директории
+                parent = target_node.parent
+                if parent and parent.remove_child(target_node.vfs_name):
+                    print(f"Удалено: {target}")
+                else:
+                    print(f"rm: не удалось удалить '{target}'")
+            else:
+                print(f"rm: {target}: файл или директория не найдена")
+
+    def remove_directory(self, dir_node: VFSNode) -> bool:
+        try:
+            for child_name, child_node in list(dir_node.children.items()):
+                if child_node.is_directory:
+                    if not self.remove_directory(child_node):
+                        return False
+                if not dir_node.remove_child(child_name):
+                    return False
+            return True 
+        except Exception as e:
+            print(f"Ошибка при удалении директории: {e}")
+            return False
 
     def handle_command(self, command, args):
         if command == "ls":
-            self.cmd_ls()
+            self.cmd_ls(args)
         elif command == "cd":
             self.cmd_cd(args)
         elif command == "pwd":
@@ -183,6 +281,8 @@ class VFSRepl:
             self.cmd_whoami()
         elif command == "exit":
             self.cmd_exit(args)
+        elif command == "rm":
+            self.cmd_rm(args)   
         else:
             print(f"{command}: команда не найдена")
     
@@ -236,4 +336,4 @@ if __name__ == "__main__":
 
 
 
-#python3 lab3.py --path test_vfs2 --prompt myVFS --script test_for_lab3.txt - запуск
+# python3 lab4.py --path . --prompt myVFS --script test_for_lab4.txt - запуск

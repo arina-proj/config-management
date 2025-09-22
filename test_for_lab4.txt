@@ -1,0 +1,14 @@
+
+
+# Тестирование удаления файла
+rm /test_vfs2/file1.txt
+ls test_vfs2
+
+# Тестирование рекурсивного удаления
+rm -r test_vfs2
+ls
+
+# Тестирование ошибок rm
+rm nonexistent_file.txt
+rm -r nonexistent_dir
+rm
