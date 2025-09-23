@@ -5,12 +5,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 class VFSNode:
-    def __init__(self, vfs_name: str, is_directory: bool=False, parent: Optional["VFSNode"] = None): 
+    def __init__(self, vfs_name: str, is_directory: bool=False, parent: Optional["VFSNode"] = None, content=None): 
         self.vfs_name = vfs_name
         self.is_directory = is_directory
         self.children: Dict[str, 'VFSNode'] = {}
         self.parent = parent
-        self.content : Optional[bytes] = None # либо типа bytes либо None - по умолчанию
+        self.content = content
 
     def remove_child(self, child_name: str) -> bool:
         if child_name in self.children:
@@ -88,7 +88,7 @@ class VFS:
                 else:
                     with open(item, "rb") as file:
                         content = file.read()
-                    file_node = VFSNode(item.name, is_directory=False, parent= vfs_node)
+                    file_node = VFSNode(item.name, is_directory=False, parent= vfs_node, content = content)
                     vfs_node.add_child(file_node)
         except Exception as error:
             print("Ошибка - " + error)
@@ -199,26 +199,47 @@ class VFSRepl:
             print("uniq: требуется указать файл")
             return
         filename = args[0]
-        if filename in self.vfs.current_dir.children:
-            file_node = self.vfs.current_dir.children[filename]
-            if not file_node.is_directory and file_node.content:
-                try:
-                    content = file_node.content.decode('utf-8')  # преобразуем байты в текст
-                    lines = content.split('\n') 
-                    unique_lines = [] #для хранения уник строк с сохранением порядка
-                    seen_lines = set() #для быстрого поиска
-                    for line in lines:
-                        if line.strip() not in seen_lines:
-                            unique_lines.append(line)
-                            seen_lines.add(line.strip())
-                    for line in unique_lines:
-                        print(line)
-                except UnicodeDecodeError: #когда файл не является текстовым в кодировке UTF-8
-                    print(f"uniq: {filename}: не текстовый файл")
-            else:
-                print(f"uniq: {filename}: не файл или файл пуст")
-        else:
+
+        target_node = self.vfs.find_node(filename)
+
+        if not target_node:
             print(f"uniq: {filename}: файл не найден")
+            return
+    
+        if target_node.is_directory:
+            print(f"uniq: {filename}: является директорией")
+            return
+
+        if target_node.content is None or len(target_node.content) == 0:
+            print(f"uniq: {filename}: файл пуст")
+            return
+
+        try:
+            content = target_node.content.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                content = target_node.content.decode('latin-1')
+            except UnicodeDecodeError:
+                print(f"uniq: {filename}: не текстовый файл")
+                return
+
+
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        lines = content.split('\n')
+
+        if lines and lines[-1] == '':
+            lines = lines[:-1]
+
+        unique_lines = []
+        seen_lines = set()
+        
+        for line in lines:
+            if line not in seen_lines:
+                unique_lines.append(line)
+                seen_lines.add(line)
+        
+        for line in unique_lines:
+            print(line)
 
     def cmd_rm(self, args):
         if not args:
@@ -292,8 +313,6 @@ class VFSRepl:
         else:
             print(f"{command}: команда не найдена")
     
-    
-
     def run_start_script(self):
         if self.start_script and os.path.exists(self.start_script):
             try:
