@@ -109,7 +109,15 @@ class VFSRepl:
         if not args:
             self.vfs.current_dir = self.vfs.root
             return
+        
+
+        if len(args) > 1:
+            print("cd: слишком много аргументов")
+            print("использование: cd [директория]")
+            return
+    
         target_path = args[0]
+
 
         if target_path == "..":
             if self.vfs.current_dir.parent:
